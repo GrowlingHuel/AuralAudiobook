@@ -37,6 +37,12 @@ class VoiceManager(private val context: Context) {
         if (voices.isEmpty() || voices.size != weights.size) {
             return FloatArray(256)
         }
+        
+        // Pure Vector Logic: Optimization for Single Voice
+        if (voices.size == 1) {
+            return voices[0].clone() 
+        }
+
         val size = voices[0].size
         val blended = FloatArray(size)
         // Normalize weights

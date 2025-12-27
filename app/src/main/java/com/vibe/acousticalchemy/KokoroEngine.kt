@@ -18,7 +18,13 @@ class KokoroEngine(private val context: Context) {
         try {
             ortEnv = OrtEnvironment.getEnvironment()
             val modelBytes = context.assets.open("kokoro.onnx").readBytes()
-            ortSession = ortEnv?.createSession(modelBytes)
+            
+            // Performance Optimization: Multi-threading
+            val options = OrtSession.SessionOptions()
+            options.setIntraOpNumThreads(4)
+            options.setInterOpNumThreads(4)
+            
+            ortSession = ortEnv?.createSession(modelBytes, options)
         } catch (e: Exception) {
             e.printStackTrace()
         }
@@ -77,13 +83,18 @@ class KokoroEngine(private val context: Context) {
             val startTime = System.currentTimeMillis()
             val results = session.run(inputs)
             val endTime = System.currentTimeMillis()
-            android.util.Log.d("KokoroEngine", "Inference Complete. Took ${endTime - startTime}ms")
+            val inferenceTimeStr = "Took ${endTime - startTime}ms"
             
-            // 5. Extract Output
+            // Log RTF
             val outputTensor = results[0] as OnnxTensor
             val floatBuffer = outputTensor.floatBuffer
             val floatArray = FloatArray(floatBuffer.remaining())
             floatBuffer.get(floatArray)
+            
+            val audioDurationMs = (floatArray.size.toFloat() / 24000f * 1000f).toLong()
+            AudioDiagnosticManager.trackPerformance(endTime - startTime, audioDurationMs)
+            
+            android.util.Log.d("KokoroEngine", "Inference Complete. $inferenceTimeStr")
             android.util.Log.d("KokoroEngine", "Output generated, size: ${floatArray.size}")
             floatArray
         } catch (e: Exception) {

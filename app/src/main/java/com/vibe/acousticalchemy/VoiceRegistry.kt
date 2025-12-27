@@ -9,7 +9,8 @@ data class VoiceArchetype(
     val position: Vector3, // Normalized [-1, 1]
     val gender: String,
     val ethnicity: String,
-    val traits: List<String>
+    val traits: List<String>,
+    val texture: String
 )
 
 data class Vector3(val x: Float, val y: Float, val z: Float)
@@ -18,7 +19,7 @@ object VoiceRegistry {
     // Specific Archetype Map
     private val specificMap = mapOf(
         "am_fenrir.bin" to Vector3(-0.9f, 0.4f, -0.8f),
-        "am_adam.bin" to Vector3(0.2f, -0.6f, -0.3f),
+        "am_adam.bin" to Vector3(0.0f, 0.0f, 0.0f),
         "bf_alice.bin" to Vector3(0.7f, -0.4f, 0.2f),
         "af_sky.bin" to Vector3(-0.3f, 0.8f, 0.5f),
         "am_onyx.bin" to Vector3(-0.6f, -0.8f, -0.7f),
@@ -28,12 +29,12 @@ object VoiceRegistry {
 
     private val titles = mapOf(
         "am_fenrir.bin" to "The Viking",
-        "am_adam.bin" to "The Professor",
-        "bf_alice.bin" to "The Librarian",
-        "af_sky.bin" to "The Rogue",
+        "am_adam.bin" to "The Narrator",
+        "bf_alice.bin" to "The Storyteller",
+        "af_sky.bin" to "The Protagonist",
         "am_onyx.bin" to "The Noir Detective",
-        "af_bella.bin" to "The Oracle",
-        "zm_yunxi.bin" to "The Eastern Monk"
+        "af_bella.bin" to "The Muse",
+        "zm_yunxi.bin" to "The Scholar"
     )
 
     private val specificTraits = mapOf(
@@ -44,6 +45,15 @@ object VoiceRegistry {
         "am_onyx.bin" to listOf("Dark", "Mysterious"),
         "af_bella.bin" to listOf("Soft", "High-Pitch"),
         "zm_yunxi.bin" to listOf("Calm", "Spiritual")
+    )
+
+    private val textures = mapOf(
+        "Resonant" to listOf("am_adam", "zm_yunjian", "bm_george", "hm_omega", "im_nicola"),
+        "Calm" to listOf("af_bella", "bf_alice", "af_sarah", "zf_xiaoxiao", "if_sara"),
+        "Nasal" to listOf("af_alloy", "af_jessica", "pf_dora", "zf_xiaoni", "am_echo"),
+        "Gravelly" to listOf("am_fenrir", "am_onyx", "bm_fable", "am_puck", "bm_lewis"),
+        "Ethereal" to listOf("af_heart", "af_aoede", "af_kore", "hf_alpha", "ff_siwis"),
+        "Dynamic" to listOf("af_sky", "am_michael", "af_nova", "af_nicole", "bf_lily")
     )
 
     // Full list of assets
@@ -61,21 +71,42 @@ object VoiceRegistry {
         "zm_yunjian.bin", "zm_yunxi.bin", "zm_yunxia.bin", "zm_yunyang.bin"
     )
 
-    val voices: List<VoiceArchetype> = allFiles.map { fileName ->
-        val pos = specificMap[fileName] ?: randomPos()
-        val title = titles[fileName] ?: generateGenericTitle(fileName)
-        val (gender, ethnicity) = parseMetadata(fileName)
-        val traits = specificTraits[fileName] ?: listOf(gender, ethnicity)
-        
-        VoiceArchetype(
-            id = fileName,
-            name = title,
-            description = "Voice Asset",
-            position = pos,
-            gender = gender,
-            ethnicity = ethnicity,
-            traits = traits
-        )
+    private val voiceTextureMap: Map<String, String> by lazy {
+        val map = mutableMapOf<String, String>()
+        textures.forEach { (texture, ids) ->
+            ids.forEach { id -> map[id] = texture }
+        }
+        map
+    }
+
+    fun getVoices(context: android.content.Context): List<VoiceArchetype> {
+        return allFiles.mapNotNull { fileName ->
+            // Asset Guard: Check if file exists to prevent Garble
+            try {
+                context.assets.open("voices/$fileName").close()
+                // If effective, parse it
+                val id = fileName.removeSuffix(".bin")
+                val pos = specificMap[fileName] ?: randomPos()
+                val title = titles[fileName] ?: generateGenericTitle(fileName)
+                val (gender, ethnicity) = parseMetadata(fileName)
+                val traits = specificTraits[fileName] ?: listOf(gender, ethnicity)
+                val texture = voiceTextureMap[id] ?: "Standard"
+                
+                VoiceArchetype(
+                    id = id,
+                    name = title,
+                    description = "Voice Asset",
+                    position = pos,
+                    gender = gender,
+                    ethnicity = ethnicity,
+                    traits = traits,
+                    texture = texture
+                )
+            } catch (e: Exception) {
+                // Asset missing, skip to prevent crash/garble
+                null
+            }
+        }
     }
 
     private fun parseMetadata(fileName: String): Pair<String, String> {
@@ -114,12 +145,13 @@ object VoiceRegistry {
         )
     }
 
-    fun filterVoices(gender: String? = null, accent: String? = null, trait: String? = null): List<VoiceArchetype> {
-        return voices.filter { voice ->
+    fun filterVoices(context: android.content.Context, gender: String? = null, accent: String? = null, trait: String? = null, texture: String? = null): List<VoiceArchetype> {
+        return getVoices(context).filter { voice ->
             val matchGender = gender == null || voice.gender.equals(gender, ignoreCase = true)
             val matchAccent = accent == null || voice.ethnicity.equals(accent, ignoreCase = true)
             val matchTrait = trait == null || voice.traits.any { it.equals(trait, ignoreCase = true) }
-            matchGender && matchAccent && matchTrait
+            val matchTexture = texture == null || voice.texture.equals(texture, ignoreCase = true)
+            matchGender && matchAccent && matchTrait && matchTexture
         }
     }
 }

@@ -4,12 +4,17 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -29,238 +34,163 @@ import kotlin.math.*
 fun VoiceLabScreen(
     voiceManager: VoiceManager,
     isPlaying: Boolean,
-    onSpeak: (String, FloatArray) -> Unit
+    onSpeak: (String, FloatArray) -> Unit,
+    onAudition: (String, FloatArray) -> Unit
 ) {
-    // Probe Position (Logical 2D: x [-1,1], y [-1,1])
-    var probe by remember { mutableStateOf(Offset(0f, 0f)) } 
-    var calculatedStyle by remember { mutableStateOf(FloatArray(256)) }
+    // State
+    var selectedVoiceId by remember { mutableStateOf<String?>(null) }
     var inputText by remember { mutableStateOf("Call me Ishmael.") }
-
+    
     // Filters
-    var filterMale by remember { mutableStateOf(true) }
-    var filterFemale by remember { mutableStateOf(true) }
-    var filterAmerican by remember { mutableStateOf(true) }
-    var filterBritish by remember { mutableStateOf(true) }
+    var selectedTextures by remember { mutableStateOf(setOf("Resonant", "Calm", "Nasal", "Gravelly", "Ethereal", "Dynamic")) }
     
-    val allStars = VoiceRegistry.voices
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val allStars = remember(context) { VoiceRegistry.getVoices(context) }
     
-    // Filtered Stars
-    val activeStars by remember(filterMale, filterFemale, filterAmerican, filterBritish) {
+    // Filtered Voices
+    val filteredVoices by remember(selectedTextures, allStars) {
         derivedStateOf {
-            allStars.filter { star ->
-                val g = if (star.gender == "Female") filterFemale else filterMale
-                val a = when(star.ethnicity) {
-                    "American" -> filterAmerican
-                    "British" -> filterBritish
-                    else -> true 
-                }
-                g && a
+            allStars.filter { voice ->
+                voice.texture in selectedTextures
             }
         }
-    }
-
-    val loadedVoices = remember {
-        allStars.associate { it.id to voiceManager.loadVoice(it.id) }
-    }
-
-    // Animation state
-    val infiniteTransition = rememberInfiniteTransition(label = "StarPulse")
-    val pulseAnim = if (isPlaying) {
-        infiniteTransition.animateFloat(
-            initialValue = 0.8f,
-            targetValue = 1.2f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(400, easing = FastOutSlowInEasing),
-                repeatMode = RepeatMode.Reverse
-            ),
-            label = "Pulse"
-        ).value
-    } else {
-        1.0f
-    }
-
-    // Update Blend Logic
-    fun updateBlend(p: Offset) {
-        if (activeStars.isEmpty()) return
-
-        val distances = activeStars.map { star ->
-            val dist = sqrt(
-                (p.x - star.position.x).pow(2) + 
-                (p.y - star.position.y).pow(2) + 
-                (0f - star.position.z).pow(2) 
-            )
-            star to dist
-        }.sortedBy { it.second }.take(5)
-
-        val targetVectors = mutableListOf<FloatArray>()
-        val targetWeights = mutableListOf<Float>()
-
-        distances.forEach { (star, dist) ->
-            loadedVoices[star.id]?.let { vec ->
-                targetVectors.add(vec)
-                targetWeights.add(1f / (dist + 0.01f))
-            }
-        }
-        
-        if (targetVectors.isNotEmpty()) {
-            calculatedStyle = voiceManager.weightedBlend(targetVectors.toList(), targetWeights.toList())
-        }
-    }
-
-    LaunchedEffect(probe, activeStars) {
-        updateBlend(probe)
     }
 
     Column(
         modifier = Modifier.fillMaxSize().background(Color(0xFF050510)).padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // Filter Header with Chips
+        // Header
         Column(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
             Text("Nebula Voice Lab", color = Color.Cyan, style = MaterialTheme.typography.headlineSmall)
             
+            // Texture Chips
             Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilterChip(
-                    selected = filterFemale,
-                    onClick = { filterFemale = !filterFemale },
-                    label = { Text("Female") },
-                    leadingIcon = if (filterFemale) { { Icon(Icons.Default.Check, null) } } else null
-                )
-                FilterChip(
-                    selected = filterMale,
-                    onClick = { filterMale = !filterMale },
-                    label = { Text("Male") },
-                    leadingIcon = if (filterMale) { { Icon(Icons.Default.Check, null) } } else null
-                )
-                FilterChip(
-                    selected = filterAmerican,
-                    onClick = { filterAmerican = !filterAmerican },
-                    label = { Text("American") },
-                    leadingIcon = if (filterAmerican) { { Icon(Icons.Default.Check, null) } } else null
-                )
-                FilterChip(
-                    selected = filterBritish,
-                    onClick = { filterBritish = !filterBritish },
-                    label = { Text("British") },
-                    leadingIcon = if (filterBritish) { { Icon(Icons.Default.Check, null) } } else null
-                )
+                val allTextures = listOf("Resonant", "Calm", "Nasal", "Gravelly", "Ethereal", "Dynamic")
+                allTextures.forEach { texture ->
+                    val isSelected = texture in selectedTextures
+                    FilterChip(
+                        selected = isSelected,
+                        onClick = { 
+                            selectedTextures = if (isSelected) selectedTextures - texture else selectedTextures + texture
+                        },
+                        label = { Text(texture) },
+                        leadingIcon = if (isSelected) { { Icon(Icons.Default.Check, null) } } else null
+                    )
             }
         }
         
-        BoxWithConstraints(
+        }
+        
+        Spacer(Modifier.height(16.dp))
+
+        // 2. Narrator List (Cards)
+        LazyColumn(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth()
-                .padding(vertical = 16.dp)
-                .background(Color.Black)
         ) {
-            val density = LocalDensity.current
-            val w = with(density) { maxWidth.toPx() }
-            val h = with(density) { maxHeight.toPx() }
-            
-            Canvas(modifier = Modifier
-                .fillMaxSize()
-                .pointerInput(Unit) {
-                    detectDragGestures { change, dragAmount ->
-                        change.consume()
-                        
-                        // Scale drag to normalized coords [-1, 1]
-                        val dx = (dragAmount.x / w) * 2f 
-                        val dy = -(dragAmount.y / h) * 2f 
-                        
-                        val newX = (probe.x + dx).coerceIn(-1f, 1f)
-                        val newY = (probe.y + dy).coerceIn(-1f, 1f)
-                        probe = Offset(newX, newY)
+            items(filteredVoices) { voice ->
+                val isSelected = voice.id == selectedVoiceId
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp)
+                        .clickable { 
+                            selectedVoiceId = voice.id
+                        },
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (isSelected) Color.Cyan.copy(alpha = 0.2f) else Color(0xFF1E1E1E)
+                    ),
+                    border = if (isSelected) androidx.compose.foundation.BorderStroke(2.dp, Color.Cyan) else null
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text(
+                            text = voice.name,
+                            style = MaterialTheme.typography.titleMedium,
+                            color = if (isSelected) Color.Cyan else Color.White
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            text = "${voice.gender} • ${voice.ethnicity} • ${voice.texture}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color.Gray
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            text = "Traits: ${voice.traits.joinToString(", ")}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color.DarkGray
+                        )
                     }
                 }
-            ) {
-                val centerX = w / 2
-                val centerY = h / 2
-                
-                // Logic [-1, 1] maps to -> [w * 0.85, h * 0.85] bounds
-                val scaleX = (w * 0.85f) / 2f
-                val scaleY = (h * 0.85f) / 2f
-
-                fun toCanvas(p: Offset): Offset {
-                    return Offset(
-                        centerX + p.x * scaleX,
-                        centerY - p.y * scaleY
-                    )
-                }
-
-                // Draw Stars
-                val paint = Paint().asFrameworkPaint().apply {
-                    isAntiAlias = true
-                    textSize = 32f
-                    color = android.graphics.Color.YELLOW
-                    textAlign = android.graphics.Paint.Align.CENTER
-                    typeface = android.graphics.Typeface.DEFAULT_BOLD
-                }
-
-                // Calculate closest star for Label
-                var closestStar: VoiceArchetype? = null
-                var closestDist = Float.MAX_VALUE
-                
-                activeStars.forEach { star ->
-                    // 2D Projection of star
-                    val starP = Offset(star.position.x, star.position.y)
-                    val pos = toCanvas(starP)
-                    
-                    val z = star.position.z 
-                    
-                    val pDist = (probe - starP).getDistance()
-                    if (pDist < closestDist) {
-                        closestDist = pDist
-                        closestStar = star
-                    }
-
-                    // Visuals
-                    val radius = (10f * (1f - (z * 0.3f))) * (if (isPlaying) pulseAnim else 1f)
-                    val alpha = (1f - ((z + 1f) / 4f)).coerceIn(0.2f, 1f)
-                    
-                    drawCircle(Color.Cyan.copy(alpha = alpha), radius = radius, center = pos)
-                }
-                
-                // Always draw closer star label high contrast
-                closestStar?.let { star ->
-                     val starP = Offset(star.position.x, star.position.y)
-                     val pos = toCanvas(starP)
-                     drawContext.canvas.nativeCanvas.drawText(
-                        star.name.uppercase(),
-                        pos.x,
-                        pos.y - 45f,
-                        paint
-                     )
-                }
-
-                // Draw Probe
-                val pProbe = toCanvas(probe)
-                drawCircle(Color.White, radius = 15f, center = pProbe)
-                drawCircle(Color.White.copy(alpha = 0.3f), radius = 35f * (if(isPlaying) pulseAnim else 1f), center = pProbe)
             }
         }
+        
+        // 3. Controls (Audition / Select)
+        Spacer(Modifier.height(16.dp))
         
         OutlinedTextField(
             value = inputText,
             onValueChange = { inputText = it },
-            label = { Text("Enter text to speak") },
-            modifier = Modifier.fillMaxWidth(),
+            label = { Text("Probe Text") },
             colors = OutlinedTextFieldDefaults.colors(
                 focusedTextColor = Color.White,
                 unfocusedTextColor = Color.White,
                 focusedBorderColor = Color.Cyan,
                 unfocusedBorderColor = Color.Gray
-            )
+            ),
+            modifier = Modifier.fillMaxWidth()
         )
         
-        Spacer(Modifier.height(8.dp))
-
-        Button(
-            onClick = { onSpeak(inputText, calculatedStyle) },
+        Spacer(Modifier.height(16.dp))
+        
+        Row(
             modifier = Modifier.fillMaxWidth(),
-            colors = ButtonDefaults.buttonColors(containerColor = Color.Cyan, contentColor = Color.Black)
+            horizontalArrangement = Arrangement.SpaceEvenly,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Text("Synthesize")
+            // Audition (Play Icon)
+            FilledIconButton(
+                enabled = selectedVoiceId != null,
+                onClick = { 
+                    selectedVoiceId?.let { id ->
+                        val vector = voiceManager.loadVoice("$id.bin")
+                        onAudition(inputText, vector)
+                    }
+                },
+                colors = IconButtonDefaults.filledIconButtonColors(
+                    containerColor = Color(0xFF202020),
+                    disabledContainerColor = Color(0xFF101010)
+                )
+            ) {
+                Icon(
+                    Icons.Default.PlayArrow, 
+                    contentDescription = "Audition", 
+                    tint = if (selectedVoiceId != null) Color.Cyan else Color.Gray
+                )
+            }
+            
+            // Select/Save (Checkmark)
+            Button(
+                enabled = selectedVoiceId != null,
+                onClick = {
+                    selectedVoiceId?.let { id ->
+                        val vector = voiceManager.loadVoice("$id.bin")
+                        val voiceName = allStars.find { it.id == id }?.name ?: "Unknown"
+                        onSpeak(voiceName, vector)
+                    }
+                },
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color.Cyan,
+                    disabledContainerColor = Color.Gray
+                )
+            ) {
+                Icon(Icons.Default.Check, contentDescription = null, tint = Color.Black)
+                Spacer(Modifier.width(8.dp))
+                Text("SELECT VOICE", color = Color.Black)
+            }
         }
     }
 }
+

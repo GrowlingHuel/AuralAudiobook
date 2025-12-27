@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">Aural Adventures</string>
+    <string name="attribution_label">Audio Narration Service</string>
 </resources>

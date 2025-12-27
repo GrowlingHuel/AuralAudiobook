@@ -1,0 +1,32 @@
+[
+    {
+        "id": 2701,
+        "title": "Moby Dick",
+        "author": "Herman Melville",
+        "genre": "Adventure"
+    },
+    {
+        "id": 1342,
+        "title": "Pride and Prejudice",
+        "author": "Jane Austen",
+        "genre": "Romance"
+    },
+    {
+        "id": 11,
+        "title": "Alice in Wonderland",
+        "author": "Lewis Carroll",
+        "genre": "Fantasy"
+    },
+    {
+        "id": 1661,
+        "title": "Sherlock Holmes",
+        "author": "Arthur Conan Doyle",
+        "genre": "Mystery"
+    },
+    {
+        "id": 84,
+        "title": "Frankenstein",
+        "author": "Mary Shelley",
+        "genre": "Horror"
+    }
+]
