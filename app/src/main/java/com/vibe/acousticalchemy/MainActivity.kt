@@ -38,8 +38,8 @@ class MainActivity : ComponentActivity() {
                     VoiceLabScreen(
                         voiceManager = voiceManager,
                         isPlaying = isSpeaking,
-                        onSpeakMobyDick = { style ->
-                            playMobyDick(style)
+                        onSpeak = { text, style ->
+                            speakText(text, style)
                         }
                     )
                 }
@@ -47,7 +47,7 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun playMobyDick(style: FloatArray) {
+    private fun speakText(text: String, style: FloatArray) {
         if (isSpeaking) return // Prevent overlap
         isSpeaking = true
 
@@ -59,10 +59,8 @@ class MainActivity : ComponentActivity() {
                 val maxVolume = audioManager.getStreamMaxVolume(android.media.AudioManager.STREAM_MUSIC)
                 audioManager.setStreamVolume(android.media.AudioManager.STREAM_MUSIC, maxVolume, 0)
 
-                val chunk = getChapterOneChunk()
-                
                 // Synthesize (Speed 1.0f)
-                val audio = kokoroEngine.generateSpeech(chunk, style, speed = 1.0f)
+                val audio = kokoroEngine.generateSpeech(text, style, speed = 1.0f)
                 
                 if (audio.isNotEmpty()) {
                     audioPlayer.play(audio)
@@ -70,7 +68,6 @@ class MainActivity : ComponentActivity() {
             } catch (e: Exception) {
                 e.printStackTrace()
             } finally {
-                // Reset UI state
                 withContext(Dispatchers.Main) {
                     isSpeaking = false
                 }
@@ -78,11 +75,7 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun getChapterOneChunk(): String {
-        // For the specific phoneme ID test, we only want "Call me Ishmael"
-        // This ensures exact matching in the Tokenizer.
-        return "Call me Ishmael"
-    }
+
 
     override fun onDestroy() {
         super.onDestroy()
